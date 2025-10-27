@@ -8,6 +8,7 @@ class NoteStore: ObservableObject {
     
     private let notesKey = "holdmyPen.notes"
     private let currentNoteIdKey = "holdmyPen.currentNoteId"
+    private var saveTimer: Timer?
     
     init() {
         loadNotes()
@@ -29,7 +30,14 @@ class NoteStore: ObservableObject {
     func updateCurrentNote(content: String) {
         guard let index = notes.firstIndex(where: { $0.id == currentNoteId }) else { return }
         notes[index].updateContent(content)
-        saveNotes()
+        debouncedSave()
+    }
+    
+    private func debouncedSave() {
+        saveTimer?.invalidate()
+        saveTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+            self?.saveNotes()
+        }
     }
     
     func createNewNote() {
@@ -56,7 +64,7 @@ class NoteStore: ObservableObject {
         guard let index = notes.firstIndex(where: { $0.id == id }) else { return }
         notes[index].fontName = fontName
         notes[index].fontSize = fontSize
-        saveNotes()
+        debouncedSave()
     }
     
     private func saveNotes() {

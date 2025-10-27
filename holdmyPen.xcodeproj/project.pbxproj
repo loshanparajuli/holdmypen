@@ -11,26 +11,26 @@
 		A3 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4 /* ContentView.swift */; };
 		A5 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A6 /* Assets.xcassets */; };
 		A7 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A8 /* Preview Assets.xcassets */; };
-		D2 /* PTSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3 /* PTSerif-Regular.ttf */; };
 		B1 /* NoteEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2 /* NoteEditorView.swift */; };
 		B3 /* BottomToolbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4 /* BottomToolbarView.swift */; };
 		B5 /* HistorySidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6 /* HistorySidebarView.swift */; };
 		B7 /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8 /* Note.swift */; };
 		B9 /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10 /* NoteStore.swift */; };
+		D2 /* PTSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3 /* PTSerif-Regular.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		C1 /* holdmyPen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = holdmyPen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2 /* holdmyPenApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = holdmyPenApp.swift; sourceTree = "<group>"; };
 		A4 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		C2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A8 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		B10 /* NoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStore.swift; sourceTree = "<group>"; };
 		B2 /* NoteEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteEditorView.swift; sourceTree = "<group>"; };
 		B4 /* BottomToolbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomToolbarView.swift; sourceTree = "<group>"; };
 		B6 /* HistorySidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySidebarView.swift; sourceTree = "<group>"; };
 		B8 /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Note.swift; sourceTree = "<group>"; };
-		B10 /* NoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStore.swift; sourceTree = "<group>"; };
+		C1 /* holdmyPen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = holdmyPen.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D3 /* PTSerif-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PTSerif-Regular.ttf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -53,14 +53,6 @@
 			);
 			sourceTree = "<group>";
 		};
-		E3 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				C1 /* holdmyPen.app */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		E2 /* holdmyPen */ = {
 			isa = PBXGroup;
 			children = (
@@ -76,6 +68,14 @@
 				E5 /* Preview Content */,
 			);
 			path = holdmyPen;
+			sourceTree = "<group>";
+		};
+		E3 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C1 /* holdmyPen.app */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 		E4 /* Models */ = {
@@ -302,15 +302,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = "";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = F6JAW2D4B9;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = holdmyPen/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = holdmyPen;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -319,6 +324,9 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.holdmypen.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -329,15 +337,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = "";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = F6JAW2D4B9;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = holdmyPen/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = holdmyPen;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -346,6 +359,8 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.holdmypen.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = macosx;
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -354,20 +369,20 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		G2 /* Build configuration list for PBXProject "holdmyPen" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				H1 /* Debug */,
-				H2 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		F2 /* Build configuration list for PBXNativeTarget "holdmyPen" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				H3 /* Debug */,
 				H4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		G2 /* Build configuration list for PBXProject "holdmyPen" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				H1 /* Debug */,
+				H2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
