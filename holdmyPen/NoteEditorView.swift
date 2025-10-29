@@ -1,5 +1,17 @@
 import SwiftUI
 
+extension NSTextView {
+    open override var frame: CGRect {
+        didSet {
+            backgroundColor = .clear
+            drawsBackground = true
+            enclosingScrollView?.hasVerticalScroller = false
+            enclosingScrollView?.hasHorizontalScroller = false
+            enclosingScrollView?.scrollerStyle = .overlay
+        }
+    }
+}
+
 struct NoteEditorView: View {
     @ObservedObject var noteStore: NoteStore
     let noteId: UUID
@@ -40,6 +52,7 @@ struct NoteEditorView: View {
                         .frame(width: geometry.size.width * 0.2)
                 }
             }
+            .scrollIndicators(.hidden)
         }
         .background(backgroundColor)
         .onAppear {

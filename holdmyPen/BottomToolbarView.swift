@@ -26,36 +26,46 @@ struct BottomToolbarView: View {
             
             // Timer
             HStack(spacing: 4) {
-                Button(action: {
-                    if isTimerRunning {
-                        isTimerRunning = false
-                    } else {
-                        isTimerRunning = true
-                    }
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: isTimerRunning ? "pause.fill" : "timer")
-                            .font(.system(size: 13))
-                        
-                        if isTimerRunning {
-                            Text(formatTimer(timerSeconds))
-                                .font(.system(size: 11, design: .monospaced))
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(iconColor)
-                
-                if isTimerRunning {
+                // Timer icon (only shows when timer is at 0)
+                if timerSeconds == 0 {
                     Button(action: {
-                        timerSeconds += 5 * 60
+                        isTimerRunning = true
                     }) {
-                        Text("+5")
-                            .font(.system(size: 11, weight: .medium))
+                        Image(systemName: "timer")
+                            .font(.system(size: 13))
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(iconColor)
-                    .help("Add 5 minutes")
+                    .help("Start timer (15 min)")
+                }
+                
+                // Timer display and controls (shows when timer is running or paused)
+                if timerSeconds > 0 {
+                    HStack(spacing: 4) {
+                        Text(formatTimer(timerSeconds))
+                            .font(.system(size: 11, design: .monospaced))
+                        
+                        Button(action: {
+                            timerSeconds += 5 * 60
+                        }) {
+                            Text("+5")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(iconColor)
+                        .help("Add 5 minutes")
+                        
+                        // Play/Pause button on the right
+                        Button(action: {
+                            isTimerRunning.toggle()
+                        }) {
+                            Image(systemName: isTimerRunning ? "pause.fill" : "play.fill")
+                                .font(.system(size: 13))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(iconColor)
+                        .help(isTimerRunning ? "Pause timer" : "Resume timer")
+                    }
                 }
             }
             

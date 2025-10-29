@@ -31,6 +31,11 @@ extension NSWindow {
         titleVisibility = .hidden
         backgroundColor = .black
         isOpaque = true
+        styleMask.insert(.fullSizeContentView)
+        standardWindowButton(.closeButton)?.isHidden = true
+        standardWindowButton(.miniaturizeButton)?.isHidden = true
+        standardWindowButton(.zoomButton)?.isHidden = true
+        isMovableByWindowBackground = true
     }
 }
 

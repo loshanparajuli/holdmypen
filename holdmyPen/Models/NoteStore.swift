@@ -36,7 +36,9 @@ class NoteStore: ObservableObject {
     private func debouncedSave() {
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-            self?.saveNotes()
+            Task { @MainActor in
+                self?.saveNotes()
+            }
         }
     }
     

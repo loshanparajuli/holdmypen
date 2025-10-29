@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var timerSeconds: Int = 0
     @State private var isTimerRunning: Bool = false
     @State private var isFullscreen: Bool = false
+    @State private var timer: Timer?
     
     var currentNote: Note? {
         noteStore.getCurrentNote()
@@ -132,16 +133,16 @@ struct ContentView: View {
     }
     
     private func startTimer() {
-        timerSeconds = 15 * 60 // 15 minutes
-        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
-            if !isTimerRunning {
-                timer.invalidate()
-                return
-            }
+        // Only reset timer if it's at 0 (new timer)
+        if timerSeconds == 0 {
+            timerSeconds = 15 * 60 // 15 minutes
+        }
+        
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             if timerSeconds > 0 {
                 timerSeconds -= 1
             } else {
-                timer.invalidate()
+                stopTimer()
                 isTimerRunning = false
                 NSSound.beep()
             }
@@ -149,7 +150,8 @@ struct ContentView: View {
     }
     
     private func stopTimer() {
-        // Timer will stop automatically
+        timer?.invalidate()
+        timer = nil
     }
 }
 
