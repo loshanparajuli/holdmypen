@@ -3,7 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var noteStore = NoteStore()
     @AppStorage("isDarkMode") private var isDarkMode: Bool = true
-    @AppStorage("showHistory") private var showHistory: Bool = false
+    @AppStorage("showHistory") private var showHistory: 
+    Bool = false
     @State private var showHistorySidebar: Bool = false
     @State private var timerSeconds: Int = 0
     @State private var isTimerRunning: Bool = false
