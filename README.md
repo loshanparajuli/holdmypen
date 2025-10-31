@@ -2,6 +2,10 @@
 
 A simple, distraction-free note-taking app for macOS.
 
+
+https://github.com/user-attachments/assets/e0c8baef-1520-4997-86f9-0c7b55ef09b3
+
+
 ## Building
 
 1. Open the project in Xcode
