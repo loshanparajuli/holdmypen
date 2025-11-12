@@ -5,6 +5,7 @@ import AppKit
 struct holdmyPenApp: App {
     init() {
         setupWindowStyle()
+        registerCustomFonts()
     }
     
     var body: some Scene {
@@ -45,6 +46,16 @@ struct holdmyPenApp: App {
         window.standardWindowButton(.miniaturizeButton)?.isHidden = true
         window.standardWindowButton(.zoomButton)?.isHidden = true
         window.isMovableByWindowBackground = true
+    }
+    
+    private func registerCustomFonts() {
+        let fontNames = ["PTSerif-Regular", "PTSerif-Bold", "PTSerif-Italic", "PTSerif-BoldItalic"]
+        
+        for fontName in fontNames {
+            if let fontURL = Bundle.main.url(forResource: fontName, withExtension: "ttf") {
+                CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, nil)
+            }
+        }
     }
 }
 

@@ -22,6 +22,8 @@
 	<string>AppIcon</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>ATSApplicationFontsPath</key>
+	<string>.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2025 losh@holdmyflower.com</string>
 	<key>NSMainStoryboardFile</key>
@@ -31,6 +33,9 @@
 	<key>UIAppFonts</key>
 	<array>
 		<string>PTSerif-Regular.ttf</string>
+		<string>PTSerif-Bold.ttf</string>
+		<string>PTSerif-Italic.ttf</string>
+		<string>PTSerif-BoldItalic.ttf</string>
 	</array>
 </dict>
 </plist>

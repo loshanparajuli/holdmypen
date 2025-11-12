@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 
 @MainActor
 class NoteStore: ObservableObject {
@@ -30,6 +31,12 @@ class NoteStore: ObservableObject {
     func updateCurrentNote(content: String) {
         guard let index = notes.firstIndex(where: { $0.id == currentNoteId }) else { return }
         notes[index].updateContent(content)
+        debouncedSave()
+    }
+    
+    func updateCurrentNoteAttributed(attributedContent: NSAttributedString) {
+        guard let index = notes.firstIndex(where: { $0.id == currentNoteId }) else { return }
+        notes[index].updateAttributedContent(attributedContent)
         debouncedSave()
     }
     
