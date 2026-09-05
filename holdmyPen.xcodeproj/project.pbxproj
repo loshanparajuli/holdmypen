@@ -20,6 +20,7 @@
 		B7 /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8 /* Note.swift */; };
 		B9 /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10 /* NoteStore.swift */; };
 		D2 /* PTSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3 /* PTSerif-Regular.ttf */; };
+		S1 /* suffer.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = S2 /* suffer.mp3 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +39,7 @@
 		C1 /* holdmyPen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = holdmyPen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D3 /* PTSerif-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PTSerif-Regular.ttf"; sourceTree = "<group>"; };
+		S2 /* suffer.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = suffer.mp3; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,6 +75,7 @@
 				47E86CBF2EC4679C00F461D2 /* PTSerif-BoldItalic.ttf */,
 				47E86CBD2EC4679400F461D2 /* PTSerif-Italic.ttf */,
 				A6 /* Assets.xcassets */,
+				S2 /* suffer.mp3 */,
 				C2 /* Info.plist */,
 				E5 /* Preview Content */,
 			);
@@ -168,6 +171,7 @@
 				47E86CC22EC467A100F461D2 /* PTSerif-Bold.ttf in Resources */,
 				D2 /* PTSerif-Regular.ttf in Resources */,
 				47E86CC02EC4679C00F461D2 /* PTSerif-BoldItalic.ttf in Resources */,
+				S1 /* suffer.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

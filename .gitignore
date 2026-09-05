@@ -1,2 +1,4 @@
 create-dmg.sh
 *.dmg
+appsepecificpass.md
+*.p12

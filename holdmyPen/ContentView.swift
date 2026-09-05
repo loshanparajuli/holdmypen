@@ -87,6 +87,7 @@ struct ContentView: View {
                 }
             }
         }
+        .frame(minWidth: 600, minHeight: 450)
         .preferredColorScheme(isDarkMode ? .dark : .light)
         .onChange(of: isTimerRunning) { _, newValue in
             if newValue {
@@ -145,14 +146,22 @@ struct ContentView: View {
             } else {
                 stopTimer()
                 isTimerRunning = false
-                NSSound.beep()
+                playTimerEndSound()
             }
         }
     }
-    
+
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
+    }
+
+    private func playTimerEndSound() {
+        if let soundURL = Bundle.main.url(forResource: "suffer", withExtension: "mp3") {
+            NSSound(contentsOf: soundURL, byReference: true)?.play()
+        } else {
+            NSSound.beep()
+        }
     }
 }
 

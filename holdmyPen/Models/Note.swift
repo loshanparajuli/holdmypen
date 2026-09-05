@@ -1,6 +1,24 @@
 import Foundation
 import AppKit
 
+struct NoteImage: Identifiable, Codable, Equatable {
+    let id: UUID
+    var imageData: Data
+    var x: Double
+    var y: Double
+    var width: Double
+    var height: Double
+
+    init(id: UUID = UUID(), imageData: Data, x: Double, y: Double, width: Double, height: Double) {
+        self.id = id
+        self.imageData = imageData
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+}
+
 struct Note: Identifiable, Codable, Equatable {
     let id: UUID
     var content: String
@@ -9,7 +27,8 @@ struct Note: Identifiable, Codable, Equatable {
     var modifiedAt: Date
     var fontName: String
     var fontSize: Double
-    
+    var images: [NoteImage]
+
     init(
         id: UUID = UUID(),
         content: String = "",
@@ -17,7 +36,8 @@ struct Note: Identifiable, Codable, Equatable {
         createdAt: Date = Date(),
         modifiedAt: Date = Date(),
         fontName: String = "System",
-        fontSize: Double = 18
+        fontSize: Double = 18,
+        images: [NoteImage] = []
     ) {
         self.id = id
         self.content = content
@@ -26,6 +46,25 @@ struct Note: Identifiable, Codable, Equatable {
         self.modifiedAt = modifiedAt
         self.fontName = fontName
         self.fontSize = fontSize
+        self.images = images
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, content, attributedContentData, createdAt, modifiedAt, fontName, fontSize, images
+    }
+
+    // Custom decoding so notes saved before `images` existed still load
+    // (a missing key would otherwise fail the whole decode).
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        content = try container.decode(String.self, forKey: .content)
+        attributedContentData = try container.decodeIfPresent(Data.self, forKey: .attributedContentData)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        modifiedAt = try container.decode(Date.self, forKey: .modifiedAt)
+        fontName = try container.decode(String.self, forKey: .fontName)
+        fontSize = try container.decode(Double.self, forKey: .fontSize)
+        images = try container.decodeIfPresent([NoteImage].self, forKey: .images) ?? []
     }
     
     var attributedContent: NSAttributedString {
