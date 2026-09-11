@@ -97,13 +97,6 @@ class NoteStore: ObservableObject {
         saveNotes()
     }
     
-    func updateNoteFont(_ id: UUID, fontName: String, fontSize: Double) {
-        guard let index = notes.firstIndex(where: { $0.id == id }) else { return }
-        notes[index].fontName = fontName
-        notes[index].fontSize = fontSize
-        debouncedSave()
-    }
-
     // Adds a pasted image to a note at a small cascading default position/size;
     // the user drags/resizes it afterward.
     func addImage(_ image: NSImage, to noteId: UUID) {

@@ -17,13 +17,86 @@ extension NSTextView {
 class FormattableTextView: NSTextView {
     var onImagePasted: ((NSImage) -> Void)?
 
-    override func paste(_ sender: Any?) {
-        if let image = NSImage(pasteboard: NSPasteboard.general) {
-            onImagePasted?(image)
-            return
-        }
-        super.paste(sender)
+    // Whatever colour the current theme is painting text in. Normalized text
+    // adopts it, so pasted content can't arrive in the source app's colour
+    // (black text pasted into dark mode used to be invisible).
+    private var currentTextColor: NSColor {
+        (typingAttributes[.foregroundColor] as? NSColor) ?? textColor ?? .labelColor
     }
+
+    override func paste(_ sender: Any?) {
+        accept(NSPasteboard.general)
+    }
+
+    // Both of these are menu/keyboard routes into the same operation, and both
+    // would otherwise bypass normalization.
+    override func pasteAsPlainText(_ sender: Any?) {
+        paste(sender)
+    }
+
+    override func pasteAsRichText(_ sender: Any?) {
+        paste(sender)
+    }
+
+    // Drag-and-drop and Services read through here rather than through
+    // `paste`, and carry the same foreign fonts, so they get the same
+    // treatment. Dropping an image lands it as a floating image, exactly as
+    // pasting one does.
+    override func readSelection(from pboard: NSPasteboard) -> Bool {
+        if accept(pboard) {
+            return true
+        }
+        return super.readSelection(from: pboard)
+    }
+
+    /// Takes content from `pasteboard` on the editor's own terms: images
+    /// become floating images, and text is rewritten into the editor's font
+    /// and size on the way in.
+    ///
+    /// Deliberately not `super.paste`, which inserts the source app's fonts
+    /// and sizes — exactly the inconsistency this fixes.
+    @discardableResult
+    private func accept(_ pasteboard: NSPasteboard) -> Bool {
+        if let image = NSImage(pasteboard: pasteboard) {
+            onImagePasted?(image)
+            return true
+        }
+        guard let incoming = attributedString(from: pasteboard) else { return false }
+        insertNormalized(incoming)
+        return true
+    }
+
+    // Richest-first, so bold/italic survives when the source offers it and we
+    // still get the text when it doesn't.
+    private func attributedString(from pasteboard: NSPasteboard) -> NSAttributedString? {
+        if let data = pasteboard.data(forType: .rtfd),
+           let attributed = NSAttributedString(rtfd: data, documentAttributes: nil) {
+            return attributed
+        }
+        if let data = pasteboard.data(forType: .rtf),
+           let attributed = NSAttributedString(rtf: data, documentAttributes: nil) {
+            return attributed
+        }
+        if let plain = pasteboard.string(forType: .string) {
+            return NSAttributedString(string: plain)
+        }
+        return nil
+    }
+
+    private func insertNormalized(_ incoming: NSAttributedString) {
+        let normalized = EditorTypography.normalized(incoming, color: currentTextColor)
+        let range = selectedRange()
+        guard shouldChangeText(in: range, replacementString: normalized.string) else { return }
+        textStorage?.replaceCharacters(in: range, with: normalized)
+        setSelectedRange(NSRange(location: range.location + normalized.length, length: 0))
+        didChangeText()
+    }
+
+    // The font panel, the Format > Font menu and NSFontManager all funnel
+    // through these. Swallowing them is what makes the size genuinely fixed
+    // rather than merely defaulted.
+    override func changeFont(_ sender: Any?) {}
+    override func changeAttributes(_ sender: Any?) {}
 
     // Intercept keyboard events
     override func keyDown(with event: NSEvent) {
@@ -42,12 +115,7 @@ class FormattableTextView: NSTextView {
         // Check for Enter/Return key - reset formatting to regular
         if event.keyCode == 36 || event.keyCode == 76 { // 36 = Return, 76 = Enter
             super.keyDown(with: event) // Insert the newline first
-            
-            // Reset to regular font for the new line
-            if let currentFont = typingAttributes[.font] as? NSFont {
-                let regularFont = NSFont(name: "PTSerif-Regular", size: currentFont.pointSize) ?? currentFont
-                typingAttributes[.font] = regularFont
-            }
+            typingAttributes[.font] = EditorTypography.font()
             return
         }
         
@@ -56,129 +124,32 @@ class FormattableTextView: NSTextView {
     }
     
     @objc func toggleBold(_ sender: Any?) {
-        guard let textStorage = textStorage else { return }
-        let selectedRange = self.selectedRange()
-        
-        if selectedRange.length == 0 {
-            // Toggle for typing attributes
-            if let font = typingAttributes[.font] as? NSFont {
-                let newFont = toggleBoldFont(font)
-                typingAttributes[.font] = newFont
-            }
-        } else {
-            // Toggle for selected text
-            textStorage.beginEditing()
-            textStorage.enumerateAttribute(.font, in: selectedRange) { value, range, _ in
-                if let font = value as? NSFont {
-                    let newFont = self.toggleBoldFont(font)
-                    textStorage.addAttribute(.font, value: newFont, range: range)
-                }
-            }
-            textStorage.endEditing()
-        }
-        didChangeText()
+        applyToSelection { EditorTypography.font(bold: !$0.isBold, italic: $0.isItalic) }
     }
-    
-    // Helper function to toggle bold with PT Serif support
-    private func toggleBoldFont(_ font: NSFont) -> NSFont {
-        let fontManager = NSFontManager.shared
-        let size = font.pointSize
-        
-        // Try using font manager first (works if fonts are properly registered)
-        let isBold = font.fontDescriptor.symbolicTraits.contains(.bold)
-        var newFont = isBold ?
-            fontManager.convert(font, toNotHaveTrait: .boldFontMask) :
-            fontManager.convert(font, toHaveTrait: .boldFontMask)
-        
-        // Check if font manager actually changed the font
-        if newFont.fontName != font.fontName {
-            return newFont
-        }
-        
-        // Fallback: Manual mapping for PT Serif if font manager didn't work
-        let fontName = font.fontName.lowercased()
-        if fontName.contains("ptserif") {
-            if fontName.contains("bold") {
-                // Remove bold
-                if fontName.contains("italic") {
-                    newFont = NSFont(name: "PTSerif-Italic", size: size) ?? font
-                } else {
-                    newFont = NSFont(name: "PTSerif-Regular", size: size) ?? font
-                }
-            } else {
-                // Add bold
-                if fontName.contains("italic") {
-                    newFont = NSFont(name: "PTSerif-BoldItalic", size: size) ?? font
-                } else {
-                    newFont = NSFont(name: "PTSerif-Bold", size: size) ?? font
-                }
-            }
-        }
-        
-        return newFont
-    }
-    
+
     @objc func toggleItalic(_ sender: Any?) {
+        applyToSelection { EditorTypography.font(bold: $0.isBold, italic: !$0.isItalic) }
+    }
+
+    // Bold and italic are the only formatting the editor offers, and both
+    // amount to swapping in a different PT Serif face at the one fixed size —
+    // never a different family and never a different size.
+    private func applyToSelection(_ transform: @escaping (NSFont) -> NSFont) {
         guard let textStorage = textStorage else { return }
         let selectedRange = self.selectedRange()
-        
+
         if selectedRange.length == 0 {
-            // Toggle for typing attributes
-            if let font = typingAttributes[.font] as? NSFont {
-                let newFont = toggleItalicFont(font)
-                typingAttributes[.font] = newFont
-            }
+            let current = (typingAttributes[.font] as? NSFont) ?? EditorTypography.font()
+            typingAttributes[.font] = transform(current)
         } else {
-            // Toggle for selected text
             textStorage.beginEditing()
             textStorage.enumerateAttribute(.font, in: selectedRange) { value, range, _ in
-                if let font = value as? NSFont {
-                    let newFont = self.toggleItalicFont(font)
-                    textStorage.addAttribute(.font, value: newFont, range: range)
-                }
+                let current = (value as? NSFont) ?? EditorTypography.font()
+                textStorage.addAttribute(.font, value: transform(current), range: range)
             }
             textStorage.endEditing()
         }
         didChangeText()
-    }
-    
-    // Helper function to toggle italic with PT Serif support
-    private func toggleItalicFont(_ font: NSFont) -> NSFont {
-        let fontManager = NSFontManager.shared
-        let size = font.pointSize
-        
-        // Try using font manager first (works if fonts are properly registered)
-        let isItalic = font.fontDescriptor.symbolicTraits.contains(.italic)
-        var newFont = isItalic ?
-            fontManager.convert(font, toNotHaveTrait: .italicFontMask) :
-            fontManager.convert(font, toHaveTrait: .italicFontMask)
-        
-        // Check if font manager actually changed the font
-        if newFont.fontName != font.fontName {
-            return newFont
-        }
-        
-        // Fallback: Manual mapping for PT Serif if font manager didn't work
-        let fontName = font.fontName.lowercased()
-        if fontName.contains("ptserif") {
-            if fontName.contains("italic") {
-                // Remove italic
-                if fontName.contains("bold") {
-                    newFont = NSFont(name: "PTSerif-Bold", size: size) ?? font
-                } else {
-                    newFont = NSFont(name: "PTSerif-Regular", size: size) ?? font
-                }
-            } else {
-                // Add italic
-                if fontName.contains("bold") {
-                    newFont = NSFont(name: "PTSerif-BoldItalic", size: size) ?? font
-                } else {
-                    newFont = NSFont(name: "PTSerif-Italic", size: size) ?? font
-                }
-            }
-        }
-        
-        return newFont
     }
     
     // Make sure the text view responds to these commands
@@ -188,6 +159,11 @@ class FormattableTextView: NSTextView {
         }
         return super.responds(to: aSelector)
     }
+}
+
+private extension NSFont {
+    var isBold: Bool { fontDescriptor.symbolicTraits.contains(.bold) }
+    var isItalic: Bool { fontDescriptor.symbolicTraits.contains(.italic) }
 }
 
 // A pasted image, floating over the text: drag anywhere to move it, drag the
@@ -385,7 +361,6 @@ struct RichTextEditor: NSViewRepresentable {
     @Binding var attributedText: NSAttributedString
     let noteId: UUID
     let textColor: NSColor
-    let fontSize: Double
     let placeholderText: String
     let images: [NoteImage]
     let onTextChange: (NSAttributedString) -> Void
@@ -410,7 +385,7 @@ struct RichTextEditor: NSViewRepresentable {
         customTextView.allowsUndo = true
         customTextView.usesFontPanel = false
         customTextView.usesRuler = false
-        customTextView.font = NSFont(name: "PTSerif-Regular", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
+        customTextView.font = EditorTypography.font()
         customTextView.textColor = textColor
         customTextView.backgroundColor = NSColor.clear
         customTextView.drawsBackground = true
@@ -420,15 +395,8 @@ struct RichTextEditor: NSViewRepresentable {
         customTextView.textContainerInset = NSSize(width: 16, height: 40)
         customTextView.textContainer?.lineFragmentPadding = 0
         
-        // Set line spacing
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 8
-        customTextView.defaultParagraphStyle = paragraphStyle
-        customTextView.typingAttributes = [
-            .font: NSFont(name: "PTSerif-Regular", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize),
-            .foregroundColor: textColor,
-            .paragraphStyle: paragraphStyle
-        ]
+        customTextView.defaultParagraphStyle = EditorTypography.paragraphStyle
+        customTextView.typingAttributes = EditorTypography.attributes(color: textColor)
         
         // Configure scroll view
         scrollView.hasVerticalScroller = false
@@ -455,10 +423,10 @@ struct RichTextEditor: NSViewRepresentable {
 
         if isNoteSwitch {
             let selectedRange = textView.selectedRange()
-            textView.textStorage?.setAttributedString(attributedText)
-            if let storage = textView.textStorage, storage.length > 0 {
-                storage.addAttribute(.foregroundColor, value: textColor, range: NSRange(location: 0, length: storage.length))
-            }
+            // Notes written before the editor enforced one size can still hold
+            // pasted-in fonts and sizes, so they're normalized on the way in
+            // rather than left to render inconsistently forever.
+            textView.textStorage?.setAttributedString(EditorTypography.normalized(attributedText, color: textColor))
             if selectedRange.location <= textView.string.count {
                 textView.setSelectedRange(selectedRange)
             }
@@ -587,7 +555,6 @@ struct NoteEditorView: View {
             ),
             noteId: noteId,
             textColor: NSColor(textColor),
-            fontSize: note?.fontSize ?? 18,
             placeholderText: placeholderText,
             images: note?.images ?? [],
             onTextChange: { attributedString in
@@ -628,7 +595,7 @@ struct NoteEditorView: View {
 
                         if (note?.content ?? "").isEmpty {
                             Text(placeholderText)
-                                .font(.custom("PTSerif-Regular", size: note?.fontSize ?? 18))
+                                .font(.custom("PTSerif-Regular", size: EditorTypography.fontSize))
                                 .foregroundColor(Color.gray.opacity(0.6))
                                 .frame(width: geometry.size.width * 0.84, alignment: .topLeading)
                                 .padding(.vertical, 40)

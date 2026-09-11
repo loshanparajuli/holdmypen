@@ -98,13 +98,7 @@ struct holdmyPenApp: App {
     }
     
     private func registerCustomFonts() {
-        let fontNames = ["PTSerif-Regular", "PTSerif-Bold", "PTSerif-Italic", "PTSerif-BoldItalic"]
-        
-        for fontName in fontNames {
-            if let fontURL = Bundle.main.url(forResource: fontName, withExtension: "ttf") {
-                CTFontManagerRegisterFontsForURL(fontURL as CFURL, .process, nil)
-            }
-        }
+        EditorTypography.registerBundledFonts()
     }
 }
 
