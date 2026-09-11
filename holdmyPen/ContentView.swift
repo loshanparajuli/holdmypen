@@ -165,9 +165,14 @@ struct ContentView: View {
     }
 }
 
+// Canvas previews are development-only scaffolding, and the #Preview macro
+// needs a plugin that only ships with Xcode — gating it keeps the app
+// buildable from the command line.
+#if DEBUG
 #Preview {
     ContentView()
 }
+#endif
 
 // Extension to create Color from hex string
 extension Color {
