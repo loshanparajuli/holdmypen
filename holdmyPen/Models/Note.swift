@@ -25,9 +25,14 @@ struct Note: Identifiable, Codable, Equatable {
     var attributedContentData: Data?
     var createdAt: Date
     var modifiedAt: Date
-    var fontName: String
-    var fontSize: Double
     var images: [NoteImage]
+
+    // Notes used to carry their own font and size. The editor now renders
+    // every note at EditorTypography's single fixed size, so these are no
+    // longer read — they're still written so a note saved by this build stays
+    // readable if someone rolls back to an earlier one.
+    private let legacyFontName = "System"
+    private let legacyFontSize = 18.0
 
     init(
         id: UUID = UUID(),
@@ -35,8 +40,6 @@ struct Note: Identifiable, Codable, Equatable {
         attributedContentData: Data? = nil,
         createdAt: Date = Date(),
         modifiedAt: Date = Date(),
-        fontName: String = "System",
-        fontSize: Double = 18,
         images: [NoteImage] = []
     ) {
         self.id = id
@@ -44,13 +47,13 @@ struct Note: Identifiable, Codable, Equatable {
         self.attributedContentData = attributedContentData
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
-        self.fontName = fontName
-        self.fontSize = fontSize
         self.images = images
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, content, attributedContentData, createdAt, modifiedAt, fontName, fontSize, images
+        case id, content, attributedContentData, createdAt, modifiedAt, images
+        case legacyFontName = "fontName"
+        case legacyFontSize = "fontSize"
     }
 
     // Custom decoding so notes saved before `images` existed still load
@@ -62,8 +65,6 @@ struct Note: Identifiable, Codable, Equatable {
         attributedContentData = try container.decodeIfPresent(Data.self, forKey: .attributedContentData)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         modifiedAt = try container.decode(Date.self, forKey: .modifiedAt)
-        fontName = try container.decode(String.self, forKey: .fontName)
-        fontSize = try container.decode(Double.self, forKey: .fontSize)
         images = try container.decodeIfPresent([NoteImage].self, forKey: .images) ?? []
     }
     
@@ -78,15 +79,11 @@ struct Note: Identifiable, Codable, Equatable {
                 return attributed
             }
             // Fallback to plain text with default attributes
-            let font = NSFont(name: "PTSerif-Regular", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.lineSpacing = 8
-            
             return NSAttributedString(
                 string: content,
                 attributes: [
-                    .font: font,
-                    .paragraphStyle: paragraphStyle
+                    .font: EditorTypography.font(),
+                    .paragraphStyle: EditorTypography.paragraphStyle
                 ]
             )
         }

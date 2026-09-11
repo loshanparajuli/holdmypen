@@ -19,6 +19,7 @@
 		B5 /* HistorySidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6 /* HistorySidebarView.swift */; };
 		B7 /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8 /* Note.swift */; };
 		B9 /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10 /* NoteStore.swift */; };
+		B11 /* EditorTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12 /* EditorTypography.swift */; };
 		D2 /* PTSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3 /* PTSerif-Regular.ttf */; };
 		S1 /* suffer.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = S2 /* suffer.mp3 */; };
 /* End PBXBuildFile section */
@@ -32,6 +33,7 @@
 		A6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A8 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		B10 /* NoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStore.swift; sourceTree = "<group>"; };
+		B12 /* EditorTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTypography.swift; sourceTree = "<group>"; };
 		B2 /* NoteEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteEditorView.swift; sourceTree = "<group>"; };
 		B4 /* BottomToolbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomToolbarView.swift; sourceTree = "<group>"; };
 		B6 /* HistorySidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySidebarView.swift; sourceTree = "<group>"; };
@@ -67,6 +69,7 @@
 				A2 /* holdmyPenApp.swift */,
 				A4 /* ContentView.swift */,
 				B2 /* NoteEditorView.swift */,
+				B12 /* EditorTypography.swift */,
 				B4 /* BottomToolbarView.swift */,
 				B6 /* HistorySidebarView.swift */,
 				E4 /* Models */,
@@ -189,6 +192,7 @@
 				B5 /* HistorySidebarView.swift in Sources */,
 				B7 /* Note.swift in Sources */,
 				B9 /* NoteStore.swift in Sources */,
+				B11 /* EditorTypography.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -342,7 +346,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.holdmypen.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -376,7 +380,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.holdmypen.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = macosx;
