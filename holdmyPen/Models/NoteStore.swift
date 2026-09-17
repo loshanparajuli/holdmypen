@@ -6,9 +6,17 @@ import AppKit
 class NoteStore: ObservableObject {
     @Published var notes: [Note] = []
     @Published var currentNoteId: UUID?
-    
+
+    /// Whether the note being edited has no text yet — the one thing about the
+    /// live document the UI needs between saves (it drives the placeholder).
+    /// Published separately so a keystroke doesn't have to republish `notes`.
+    @Published private(set) var isCurrentNoteEmpty: Bool = true
+
     private let notesKey = "holdmyPen.notes"
     private let currentNoteIdKey = "holdmyPen.currentNoteId"
+    // Injectable so the headless tests can run against a throwaway suite
+    // instead of the real app's saved notes.
+    private let defaults: SendableDefaults
     private var saveTimer: Timer?
 
     // Live rich-text per note, kept in memory during editing so we don't
@@ -16,19 +24,26 @@ class NoteStore: ObservableObject {
     // to `Note.attributedContentData` (RTF) when we actually persist.
     private var attributedCache: [UUID: NSAttributedString] = [:]
     private var dirtyNoteIds: Set<UUID> = []
-    
-    init() {
+
+    // JSON-encoding every note — image blobs included — is far too slow to sit
+    // between keystrokes on the main thread.
+    private let saveQueue = DispatchQueue(label: "com.holdmypen.notestore.save", qos: .utility)
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = SendableDefaults(defaults)
         loadNotes()
         if notes.isEmpty {
             createNewNote()
-        } else if let currentId = UserDefaults.standard.string(forKey: currentNoteIdKey),
+        } else if let currentId = defaults.string(forKey: currentNoteIdKey),
                   let uuid = UUID(uuidString: currentId) {
             currentNoteId = uuid
         } else {
             currentNoteId = notes.first?.id
         }
+        refreshEmptiness()
+        observeAppLifecycle()
     }
-    
+
     func getCurrentNote() -> Note? {
         guard let id = currentNoteId else { return nil }
         return notes.first { $0.id == id }
@@ -48,24 +63,52 @@ class NoteStore: ObservableObject {
         return decoded
     }
 
-    func updateCurrentNote(content: String) {
-        guard let index = notes.firstIndex(where: { $0.id == currentNoteId }) else { return }
-        notes[index].updateContent(content)
+    func updateCurrentNoteAttributed(attributedContent: NSAttributedString) {
+        guard let id = currentNoteId else { return }
+        // Typing must not write into `notes`. It's @Published, so every
+        // keystroke would rebuild the SwiftUI tree — and comparing a `Note`
+        // means byte-comparing its RTF blob and every image it holds. The live
+        // document lives here instead and is folded back in when we persist.
+        attributedCache[id] = attributedContent
+        dirtyNoteIds.insert(id)
+        setEmptiness(attributedContent.length == 0)
         debouncedSave()
     }
 
-    func updateCurrentNoteAttributed(attributedContent: NSAttributedString) {
-        guard let id = currentNoteId,
-              let index = notes.firstIndex(where: { $0.id == id }) else { return }
-        // Cheap: update the plain-text mirror (for previews/word count) and
-        // stash the rich text in memory. No RTF encoding on the typing path.
-        attributedCache[id] = attributedContent
-        notes[index].content = attributedContent.string
-        notes[index].modifiedAt = Date()
-        dirtyNoteIds.insert(id)
-        debouncedSave()
+    /// Folds the live editing cache back into `notes`. Anything that reads a
+    /// note's text — persisting, the history sidebar's previews and word
+    /// counts — has to go through here first, or it reads text as of the last
+    /// save rather than as of the last keystroke.
+    func flushPendingEdits() {
+        guard !dirtyNoteIds.isEmpty else { return }
+        for id in dirtyNoteIds {
+            guard let index = notes.firstIndex(where: { $0.id == id }),
+                  let cached = attributedCache[id] else { continue }
+            notes[index].updateAttributedContent(cached)
+        }
+        dirtyNoteIds.removeAll()
     }
-    
+
+    private func setEmptiness(_ isEmpty: Bool) {
+        // Only publishes on the keystroke that actually empties or fills the
+        // note, not on the thousands in between.
+        if isCurrentNoteEmpty != isEmpty {
+            isCurrentNoteEmpty = isEmpty
+        }
+    }
+
+    private func refreshEmptiness() {
+        guard let id = currentNoteId else {
+            isCurrentNoteEmpty = true
+            return
+        }
+        if let cached = attributedCache[id] {
+            setEmptiness(cached.length == 0)
+        } else {
+            setEmptiness(notes.first(where: { $0.id == id })?.content.isEmpty ?? true)
+        }
+    }
+
     private func debouncedSave() {
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
@@ -74,29 +117,35 @@ class NoteStore: ObservableObject {
             }
         }
     }
-    
+
     func createNewNote() {
+        flushPendingEdits()
         let newNote = Note()
         notes.insert(newNote, at: 0)
         currentNoteId = newNote.id
+        isCurrentNoteEmpty = true
         saveNotes()
     }
-    
+
     func switchToNote(_ id: UUID) {
+        flushPendingEdits()
         currentNoteId = id
-        UserDefaults.standard.set(id.uuidString, forKey: currentNoteIdKey)
+        refreshEmptiness()
+        defaults.store.set(id.uuidString, forKey: currentNoteIdKey)
     }
-    
+
     func deleteNote(_ id: UUID) {
+        dirtyNoteIds.remove(id)
+        flushPendingEdits()
         notes.removeAll { $0.id == id }
         attributedCache.removeValue(forKey: id)
-        dirtyNoteIds.remove(id)
         if currentNoteId == id {
             currentNoteId = notes.first?.id
+            refreshEmptiness()
         }
         saveNotes()
     }
-    
+
     // Adds a pasted image to a note at a small cascading default position/size;
     // the user drags/resizes it afterward.
     func addImage(_ image: NSImage, to noteId: UUID) {
@@ -132,30 +181,59 @@ class NoteStore: ObservableObject {
         notes[index].images.removeAll { $0.id == imageId }
         saveNotes()
     }
-    
-    private func saveNotes() {
-        // RTF-encode only the notes that actually changed since the last
-        // save, and only once here (not on every keystroke).
-        for id in dirtyNoteIds {
-            guard let index = notes.firstIndex(where: { $0.id == id }),
-                  let cached = attributedCache[id] else { continue }
-            notes[index].updateAttributedContent(cached)
-        }
-        dirtyNoteIds.removeAll()
 
-        if let encoded = try? JSONEncoder().encode(notes) {
-            UserDefaults.standard.set(encoded, forKey: notesKey)
+    // Quitting or switching away shouldn't cost the last couple of seconds of
+    // writing that the debounce is still holding.
+    private func observeAppLifecycle() {
+        let center = NotificationCenter.default
+        center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.saveNotes() }
         }
-        if let id = currentNoteId {
-            UserDefaults.standard.set(id.uuidString, forKey: currentNoteIdKey)
+        center.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.saveAndWait() }
         }
     }
-    
+
+    /// Saves and blocks until the write has landed — only for termination,
+    /// where the process won't be around for the background write to finish.
+    func saveAndWait() {
+        saveNotes()
+        saveQueue.sync {}
+    }
+
+    private func saveNotes() {
+        saveTimer?.invalidate()
+        saveTimer = nil
+        // RTF-encode only the notes that actually changed since the last save.
+        flushPendingEdits()
+
+        let snapshot = notes
+        let currentId = currentNoteId?.uuidString
+        let defaults = self.defaults
+        let notesKey = self.notesKey
+        let currentNoteIdKey = self.currentNoteIdKey
+        saveQueue.async {
+            if let encoded = try? JSONEncoder().encode(snapshot) {
+                defaults.store.set(encoded, forKey: notesKey)
+            }
+            if let currentId {
+                defaults.store.set(currentId, forKey: currentNoteIdKey)
+            }
+        }
+    }
+
     private func loadNotes() {
-        if let data = UserDefaults.standard.data(forKey: notesKey),
+        if let data = defaults.store.data(forKey: notesKey),
            let decoded = try? JSONDecoder().decode([Note].self, from: data) {
             notes = decoded
         }
     }
 }
 
+// UserDefaults is documented as thread-safe, which is what lets the background
+// save write through it; the type just isn't marked Sendable, so this says so
+// explicitly rather than leaving a warning at every capture.
+private struct SendableDefaults: @unchecked Sendable {
+    let store: UserDefaults
+    init(_ store: UserDefaults) { self.store = store }
+}

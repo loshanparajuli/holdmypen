@@ -84,7 +84,7 @@ var hostWindows: [NSWindow] = []
 
 func makeTextView() -> FormattableTextView {
     let frame = NSRect(x: 0, y: 0, width: 600, height: 400)
-    let textView = FormattableTextView(frame: frame)
+    let textView = FormattableTextView.makeWithTextKit1(frame: frame)
     textView.isRichText = true
     textView.allowsUndo = true
     textView.font = EditorTypography.font()
@@ -395,6 +395,274 @@ suite("notes saved by older builds still decode") {
     }
     check(object.first?["fontName"] != nil, "fontName dropped from saved notes")
     check(object.first?["fontSize"] != nil, "fontSize dropped from saved notes")
+}
+
+suite("the text view comes up on TextKit 1") {
+    // Order matters: reading `layoutManager` is itself what drags a TextKit 2
+    // view down into TextKit 1 compatibility mode, so asking which engine it
+    // is on has to come first or the question answers itself.
+    let textView = FormattableTextView.makeWithTextKit1(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
+    check(textView.textLayoutManager == nil, "text view came up on TextKit 2")
+    check(textView.layoutManager != nil, "no TextKit 1 layout manager")
+    check(textView.textStorage != nil, "no text storage")
+    check(textView.textContainer?.lineFragmentPadding == 0, "container padding was not cleared")
+
+    // The storage is only reachable through the layout manager, which does not
+    // own it — losing it would empty the editor.
+    check(textView.textStorage === textView.layoutManager?.textStorage,
+          "text view and layout manager disagree about the storage")
+}
+
+suite("text flows around a floating image") {
+    let textView = makeTextView()
+    textView.textContainerInset = NSSize(width: 16, height: 40)
+    textView.textContainer?.lineFragmentPadding = 0
+    textView.typingAttributes = EditorTypography.attributes(color: themeColor)
+    textView.string = ""
+    textView.insertText(String(repeating: "word ", count: 200),
+                        replacementRange: NSRange(location: 0, length: 0))
+
+    guard let layoutManager = textView.layoutManager, let container = textView.textContainer else {
+        check(false, "no TextKit 1 stack")
+        return
+    }
+
+    func heightOfLaidOutText() -> CGFloat {
+        layoutManager.ensureLayout(for: container)
+        return layoutManager.usedRect(for: container).height
+    }
+
+    let plainHeight = heightOfLaidOutText()
+    // An image parked over the first few lines, in the text view's own
+    // coordinates — the same thing FloatingImageView hands over.
+    textView.setImageExclusionFrames([CGRect(x: 20, y: 50, width: 240, height: 200)])
+    let wrappedHeight = heightOfLaidOutText()
+
+    check(container.exclusionPaths.count == 1,
+          "expected 1 exclusion path, got \(container.exclusionPaths.count)")
+    // Text pushed aside by the image has to go somewhere, so the document
+    // grows. If wrapping is being ignored, the two heights are identical.
+    check(wrappedHeight > plainHeight,
+          "text did not reflow around the image (\(plainHeight) -> \(wrappedHeight))")
+
+    // The first line beside the image has to start clear of it: the image sits
+    // at x=20..260 in view coordinates, i.e. x=4..244 in the container.
+    let imageBottomInContainer = 50 + 200 - textView.textContainerInset.height
+    var foundLineBesideImage = false
+    layoutManager.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: layoutManager.numberOfGlyphs)) { _, used, _, _, stop in
+        if used.midY < imageBottomInContainer {
+            foundLineBesideImage = true
+            check(used.minX >= 244, "a line beside the image starts at x=\(used.minX), inside it")
+            stop.pointee = true
+        }
+    }
+    check(foundLineBesideImage, "no line was laid out alongside the image")
+
+    // Clearing the frames puts the text back.
+    textView.setImageExclusionFrames([])
+    check(container.exclusionPaths.isEmpty, "exclusion paths were not cleared")
+    check(heightOfLaidOutText() == plainHeight, "text did not flow back after the image was removed")
+}
+
+suite("a sliver of column beside an image is not used for text") {
+    // Wrapping into a gap too narrow for a line gives one word per line down
+    // the side of the image, which reads as broken rather than as wrapping.
+    let textView = makeTextView()
+    textView.textContainerInset = NSSize(width: 16, height: 40)
+    textView.textContainer?.lineFragmentPadding = 0
+    textView.typingAttributes = EditorTypography.attributes(color: themeColor)
+    textView.string = ""
+    textView.insertText(String(repeating: "word ", count: 200),
+                        replacementRange: NSRange(location: 0, length: 0))
+
+    guard let layoutManager = textView.layoutManager, let container = textView.textContainer else {
+        check(false, "no TextKit 1 stack")
+        return
+    }
+
+    // 600 wide less two 16pt insets leaves a 568pt column. With the 8pt
+    // breathing room around the image, this one covers 252...508 of it — a
+    // roomy 252pt on the left and a 60pt sliver on the right, wide enough for
+    // TextKit to drop one short word per line into if it is left alone.
+    let image = CGRect(x: 276, y: 100, width: 240, height: 160)
+    textView.setImageExclusionFrames([image])
+    layoutManager.ensureLayout(for: container)
+
+    let band = (top: CGFloat(100 - 40 - 8), bottom: CGFloat(100 + 160 - 40 + 8))
+    var linesBesideImage = 0
+    var textOnTheSliver = 0
+    layoutManager.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: layoutManager.numberOfGlyphs)) { _, used, _, _, _ in
+        guard used.midY > band.top && used.midY < band.bottom else { return }
+        linesBesideImage += 1
+        if used.minX >= 508 { textOnTheSliver += 1 }
+    }
+    check(linesBesideImage > 0, "no lines were laid out alongside the image at all")
+    check(textOnTheSliver == 0, "\(textOnTheSliver) lines were squeezed into the gap right of the image")
+}
+
+suite("the text view stays at least as tall as the window") {
+    // Floating images are subviews of the text view and clamped to its bounds,
+    // and a click below the last line has to land in the text. Both break if
+    // the text view shrinks to fit a one-line note.
+    let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
+    let textView = FormattableTextView.makeWithTextKit1(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
+    textView.autoresizingMask = [.width]
+    textView.isVerticallyResizable = true
+    textView.isHorizontallyResizable = false
+    textView.minSize = .zero
+    textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
+                              height: CGFloat.greatestFiniteMagnitude)
+    scrollView.documentView = textView
+    scrollView.layoutSubtreeIfNeeded()
+
+    textView.typingAttributes = EditorTypography.attributes(color: themeColor)
+    textView.string = ""
+    textView.insertText("one short line", replacementRange: NSRange(location: 0, length: 0))
+    textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+    scrollView.layoutSubtreeIfNeeded()
+
+    let visibleHeight = scrollView.contentView.bounds.height
+    check(textView.frame.height >= visibleHeight,
+          "text view is \(textView.frame.height) tall, shorter than the \(visibleHeight) on screen")
+}
+
+suite("typing does not republish the note list") { MainActor.assumeIsolated {
+    let suiteName = "holdmyPen.tests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let store = NoteStore(defaults: defaults)
+    store.createNewNote()
+    guard let id = store.currentNoteId else {
+        check(false, "no current note")
+        return
+    }
+    let before = store.notes
+
+    // What the editor hands over: already in the editor's typography.
+    store.updateCurrentNoteAttributed(
+        attributedContent: EditorTypography.normalized(
+            NSAttributedString(string: "half a sentence"), color: themeColor))
+
+    // The keystroke path only touches the caches; `notes` is @Published, and
+    // rewriting it on every keystroke is what made typing stutter.
+    check(store.notes == before, "typing mutated the published note list")
+    check(store.isCurrentNoteEmpty == false, "placeholder flag did not clear")
+    check(store.attributedContent(for: id).string == "half a sentence",
+          "live text was not readable back")
+
+    // ...and the text is still there once anything actually reads the notes.
+    store.flushPendingEdits()
+    check(store.getCurrentNote()?.content == "half a sentence",
+          "flush lost the text: \(store.getCurrentNote()?.content ?? "nil")")
+    checkUniformTypography(store.getCurrentNote()!.attributedContent, "flushed note")
+} }
+
+suite("a corner drag resizes from that corner and keeps the aspect ratio") {
+    // 240x160 — a 3:2 picture — sitting well inside a roomy page.
+    let original = CGRect(x: 200, y: 200, width: 240, height: 160)
+    let page = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+    let aspectRatio = original.width / original.height
+
+    for corner in FloatingImageView.ResizeCorner.allCases {
+        // Drag the corner outwards, diagonally away from its anchor.
+        let anchor = corner.anchor(in: original)
+        let target = CGPoint(x: anchor.x + (corner.growsLeftward ? -360 : 360),
+                             y: anchor.y + (corner.growsUpward ? -240 : 240))
+        let resized = FloatingImageView.resizedImageFrame(
+            original: original, corner: corner, dragTo: target, within: page)
+
+        check(abs(resized.width / resized.height - aspectRatio) < 0.001,
+              "\(corner) gave \(resized.width)x\(resized.height), ratio \(resized.width / resized.height)")
+        // The opposite corner is the one thing a corner drag must not move.
+        let anchorAfter = corner.anchor(in: resized)
+        check(abs(anchorAfter.x - anchor.x) < 0.001 && abs(anchorAfter.y - anchor.y) < 0.001,
+              "\(corner) moved its anchor from \(anchor) to \(anchorAfter)")
+        check(resized.width > original.width, "\(corner) dragged outwards but shrank")
+    }
+}
+
+suite("each corner points its resize cursor along the right diagonal") {
+    // On screen (y growing downward) top-left and bottom-right lie along "\\",
+    // the other two along "/". Getting this backwards gives every corner a
+    // cursor that contradicts the direction it actually resizes in.
+    check(FloatingImageView.ResizeCorner.topLeft.isBackslashDiagonal, "top-left should be \\")
+    check(FloatingImageView.ResizeCorner.bottomRight.isBackslashDiagonal, "bottom-right should be \\")
+    check(!FloatingImageView.ResizeCorner.topRight.isBackslashDiagonal, "top-right should be /")
+    check(!FloatingImageView.ResizeCorner.bottomLeft.isBackslashDiagonal, "bottom-left should be /")
+
+    // And the direction each corner grows in, which is what the anchor maths
+    // and the clamping both key off.
+    check(FloatingImageView.ResizeCorner.topLeft.growsLeftward
+            && FloatingImageView.ResizeCorner.topLeft.growsUpward, "top-left grows up and left")
+    check(!FloatingImageView.ResizeCorner.bottomRight.growsLeftward
+            && !FloatingImageView.ResizeCorner.bottomRight.growsUpward, "bottom-right grows down and right")
+}
+
+suite("a corner drag stays inside the page and above the minimum size") {
+    let original = CGRect(x: 200, y: 200, width: 240, height: 160)
+    let page = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+
+    // Dragged far past the edge of the page.
+    let overshot = FloatingImageView.resizedImageFrame(
+        original: original, corner: .bottomRight, dragTo: CGPoint(x: 5000, y: 5000), within: page)
+    check(page.contains(overshot), "\(overshot) escaped the page")
+    check(abs(overshot.width / overshot.height - 240.0 / 160.0) < 0.001,
+          "clamping to the page broke the aspect ratio: \(overshot)")
+
+    // Dragged back past its own anchor, which would otherwise invert it.
+    let collapsed = FloatingImageView.resizedImageFrame(
+        original: original, corner: .bottomRight, dragTo: CGPoint(x: 100, y: 100), within: page)
+    check(collapsed.width >= FloatingImageView.minimumSide
+            && collapsed.height >= FloatingImageView.minimumSide,
+          "collapsed to \(collapsed.width)x\(collapsed.height)")
+    check(abs(collapsed.width / collapsed.height - 240.0 / 160.0) < 0.001,
+          "the minimum size broke the aspect ratio: \(collapsed)")
+}
+
+suite("moving an image keeps it on the page at its original size") {
+    let original = CGRect(x: 200, y: 200, width: 240, height: 160)
+    let page = CGRect(x: 0, y: 0, width: 1000, height: 1000)
+
+    let moved = FloatingImageView.movedImageFrame(
+        original: original, by: CGSize(width: 60, height: -40), within: page)
+    check(moved == CGRect(x: 260, y: 160, width: 240, height: 160), "moved to \(moved)")
+
+    for offset in [CGSize(width: -9999, height: -9999), CGSize(width: 9999, height: 9999)] {
+        let shoved = FloatingImageView.movedImageFrame(original: original, by: offset, within: page)
+        check(page.contains(shoved), "\(shoved) escaped the page")
+        check(shoved.size == original.size, "moving resized it to \(shoved.size)")
+    }
+}
+
+suite("the chrome ring does not swallow clicks meant for the text") {
+    // The view is padded out beyond the picture to hold the corner points and
+    // the remove badge; that padding must stay click-through or every image
+    // would sit in a dead zone where the caret can't be placed.
+    let image = NSImage(size: NSSize(width: 10, height: 10))
+    image.lockFocus()
+    NSColor.red.drawSwatch(in: NSRect(x: 0, y: 0, width: 10, height: 10))
+    image.unlockFocus()
+
+    let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+    let picture = NSRect(x: 200, y: 200, width: 240, height: 160)
+    let view = FloatingImageView(imageId: UUID(), image: image, imageFrame: picture)
+    host.addSubview(view)
+
+    check(view.imageFrame == picture, "imageFrame came back as \(view.imageFrame)")
+    check(view.frame.insetBy(dx: FloatingImageView.chromePadding, dy: FloatingImageView.chromePadding) == picture,
+          "the chrome ring is not centred on the picture: \(view.frame)")
+
+    // Superview coordinates, which is what hitTest is given.
+    check(view.hitTest(CGPoint(x: 300, y: 260)) === view, "a click on the picture missed it")
+    for corner in FloatingImageView.ResizeCorner.allCases {
+        let point = corner.position(in: picture)
+        check(view.hitTest(point) === view, "the \(corner) point could not be grabbed")
+    }
+    // Empty ring: just outside the picture, away from every corner and badge.
+    check(view.hitTest(CGPoint(x: 320, y: picture.maxY + 12)) == nil,
+          "the empty chrome ring below the picture swallowed a click")
+    check(view.hitTest(CGPoint(x: 600, y: 400)) == nil, "hit test claimed a point nowhere near it")
 }
 
 // MARK: - Report

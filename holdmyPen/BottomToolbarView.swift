@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct BottomToolbarView: View {
-    let currentNote: Note?
     @Binding var isDarkMode: Bool
     @Binding var showHistory: Bool
     @Binding var timerSeconds: Int

@@ -20,6 +20,8 @@
 		B7 /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8 /* Note.swift */; };
 		B9 /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10 /* NoteStore.swift */; };
 		B11 /* EditorTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B12 /* EditorTypography.swift */; };
+		B13 /* EditorTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14 /* EditorTextView.swift */; };
+		B15 /* FloatingImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16 /* FloatingImageView.swift */; };
 		D2 /* PTSerif-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D3 /* PTSerif-Regular.ttf */; };
 		S1 /* suffer.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = S2 /* suffer.mp3 */; };
 /* End PBXBuildFile section */
@@ -34,6 +36,8 @@
 		A8 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		B10 /* NoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStore.swift; sourceTree = "<group>"; };
 		B12 /* EditorTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTypography.swift; sourceTree = "<group>"; };
+		B14 /* EditorTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorTextView.swift; sourceTree = "<group>"; };
+		B16 /* FloatingImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingImageView.swift; sourceTree = "<group>"; };
 		B2 /* NoteEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteEditorView.swift; sourceTree = "<group>"; };
 		B4 /* BottomToolbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomToolbarView.swift; sourceTree = "<group>"; };
 		B6 /* HistorySidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistorySidebarView.swift; sourceTree = "<group>"; };
@@ -70,6 +74,8 @@
 				A4 /* ContentView.swift */,
 				B2 /* NoteEditorView.swift */,
 				B12 /* EditorTypography.swift */,
+				B14 /* EditorTextView.swift */,
+				B16 /* FloatingImageView.swift */,
 				B4 /* BottomToolbarView.swift */,
 				B6 /* HistorySidebarView.swift */,
 				E4 /* Models */,
@@ -193,6 +199,8 @@
 				B7 /* Note.swift in Sources */,
 				B9 /* NoteStore.swift in Sources */,
 				B11 /* EditorTypography.swift in Sources */,
+				B13 /* EditorTextView.swift in Sources */,
+				B15 /* FloatingImageView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

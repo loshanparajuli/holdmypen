@@ -15,17 +15,20 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-# Everything except the @main entry point, which would fight with the test
-# runner's own top-level code.
-SOURCES=()
-for file in "$ROOT"/holdmyPen/*.swift "$ROOT"/holdmyPen/Models/*.swift; do
-    [ "$(basename "$file")" = "holdmyPenApp.swift" ] && continue
-    SOURCES+=("$file")
-done
+# The editor and storage layers, which are what these tests exercise. The
+# SwiftUI views are left out on purpose: @State is a macro now, and expanding
+# it needs the SwiftUIMacros plugin that only ships inside Xcode — including
+# them here would make the tests unrunnable on plain Command Line Tools.
+SOURCES=(
+    "$ROOT/holdmyPen/EditorTypography.swift"
+    "$ROOT/holdmyPen/EditorTextView.swift"
+    "$ROOT/holdmyPen/FloatingImageView.swift"
+    "$ROOT/holdmyPen/Models/Note.swift"
+    "$ROOT/holdmyPen/Models/NoteStore.swift"
+)
 
-# Built without -DDEBUG, which leaves out the #Preview block: its macro needs a
-# plugin that ships with Xcode rather than Command Line Tools.
 swiftc -target "$(uname -m)-apple-macosx14.0" \
+    -swift-version 5 \
     -o "$WORK_DIR/tests" \
     "${SOURCES[@]}" \
     "$ROOT"/Tests/*.swift

@@ -44,7 +44,6 @@ struct ContentView: View {
                 .safeAreaInset(edge: .bottom) {
                     // Bottom toolbar - fixed at bottom
                     BottomToolbarView(
-                        currentNote: currentNote,
                         isDarkMode: $isDarkMode,
                         showHistory: $showHistorySidebar,
                         timerSeconds: $timerSeconds,
@@ -89,6 +88,14 @@ struct ContentView: View {
         }
         .frame(minWidth: 600, minHeight: 450)
         .preferredColorScheme(isDarkMode ? .dark : .light)
+        .onChange(of: showHistorySidebar) { _, isShowing in
+            // Previews and word counts are read straight off `notes`, and
+            // typing deliberately leaves the last couple of seconds of writing
+            // in the store's cache — so settle it before the list reads it.
+            if isShowing {
+                noteStore.flushPendingEdits()
+            }
+        }
         .onChange(of: isTimerRunning) { _, newValue in
             if newValue {
                 startTimer()
