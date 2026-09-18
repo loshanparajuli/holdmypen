@@ -16,8 +16,9 @@ final class FormattableTextView: NSTextView {
     var onImagePasted: ((NSImage) -> Void)?
 
     // How much clear space to leave between a floating image and the text
-    // flowing around it.
-    private static let exclusionPadding: CGFloat = 8
+    // flowing around it. Enough to clear the corner points that straddle the
+    // image's edge, not just the edge itself.
+    static let exclusionPadding: CGFloat = 14
 
     // The text view's own references reach the storage only through the
     // layout manager, which doesn't own it; this keeps it alive for the
@@ -62,16 +63,39 @@ final class FormattableTextView: NSTextView {
         super.setFrameSize(size)
     }
 
+    /// One line of type, including the paragraph's line spacing — the vertical
+    /// unit of the wrap grid.
+    var lineHeight: CGFloat {
+        let font = EditorTypography.font()
+        let base = layoutManager?.defaultLineHeight(for: font)
+            ?? (font.ascender - font.descender + font.leading)
+        return base + EditorTypography.lineSpacing
+    }
+
+    /// The column-and-line grid floating images are placed on, or nil when the
+    /// writing column is too narrow to carry one.
+    var wrapGrid: WrapGrid? {
+        let inset = textContainerInset
+        return WrapGrid(containerWidth: bounds.width - inset.width * 2,
+                        origin: CGPoint(x: inset.width, y: inset.height),
+                        lineHeight: lineHeight)
+    }
+
     /// Reflows the text around `frames`, given in this view's coordinates.
     func setImageExclusionFrames(_ frames: [CGRect]) {
         guard let container = textContainer else { return }
         let inset = textContainerInset
         let columnWidth = max(0, bounds.width - inset.width * 2)
+        let grid = wrapGrid
+
         container.exclusionPaths = frames.map { frame in
-            // Text container coordinates are this view's, less the inset.
-            let padded = frame.insetBy(dx: -Self.exclusionPadding, dy: -Self.exclusionPadding)
-            let inContainer = padded.offsetBy(dx: -inset.width, dy: -inset.height)
-            return NSBezierPath(rect: Self.sweepingAsideSlivers(inContainer, columnWidth: columnWidth))
+            // Text stops at the picture's whole grid cell, so every line beside
+            // it starts on the same column edge. Without a grid there's nothing
+            // to align to, so fall back to holding the text off by a fixed gap.
+            let cell = grid?.exclusionCell(forImageFrame: frame)
+                ?? frame.insetBy(dx: -Self.exclusionPadding, dy: -Self.exclusionPadding)
+                        .offsetBy(dx: -inset.width, dy: -inset.height)
+            return NSBezierPath(rect: Self.sweepingAsideSlivers(cell, columnWidth: columnWidth))
         }
     }
 

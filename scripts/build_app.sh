@@ -17,6 +17,8 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SRC="$ROOT/holdmyPen"
 
 OUTPUT_DIR="${1:-$ROOT/build}"
+# Pass "-" to ad-hoc sign, which is all a build you only intend to run on this
+# machine needs; distribution still wants a real Developer ID.
 IDENTITY="${2:-Developer ID Application}"
 
 DEPLOYMENT_TARGET=14.0
@@ -36,6 +38,27 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # Built without -DDEBUG, so the #Preview block is left out: its macro needs a
 # plugin that ships with Xcode rather than Command Line Tools.
 SOURCES=("$SRC"/*.swift "$SRC"/Models/*.swift)
+
+# `@State` is an attached macro in current SDKs, and expanding it needs the
+# SwiftUIMacros plugin — an Xcode component that the Command Line Tools have
+# never carried. Without it every SwiftUI view here fails to compile, which
+# would leave this script unable to do the one thing it exists for. When the
+# plugin is missing, build from a copy of the sources with `@State` pointed at
+# scripts/CompatState.swift, which forwards to the same property wrapper the
+# macro expands to. The checked-in sources stay plain SwiftUI; only this
+# build's copy of them is rewritten.
+if ! find "$(xcrun --find swiftc | sed 's|/usr/bin/swiftc||')/usr/lib/swift/host/plugins" \
+        -name 'libSwiftUIMacros.dylib' 2>/dev/null | grep -q .; then
+    echo "note: SwiftUIMacros plugin not found (no Xcode); building @State through scripts/CompatState.swift"
+    SHIMMED="$WORK_DIR/sources"
+    mkdir -p "$SHIMMED/Models"
+    cp "$SRC"/*.swift "$SHIMMED/"
+    cp "$SRC"/Models/*.swift "$SHIMMED/Models/"
+    cp "$SCRIPT_DIR/CompatState.swift" "$SHIMMED/"
+    # Only the attribute; `@StateObject` has no space after it and is untouched.
+    sed -i '' 's/@State /@CompatState /g' "$SHIMMED"/*.swift
+    SOURCES=("$SHIMMED"/*.swift "$SHIMMED"/Models/*.swift)
+fi
 
 for arch in arm64 x86_64; do
     swiftc \
@@ -92,10 +115,15 @@ plutil -convert binary1 "$PLIST"
 
 # --options runtime is the hardened runtime (ENABLE_HARDENED_RUNTIME = YES),
 # and notarization refuses anything without it. The timestamp is likewise
-# required.
-codesign --force --timestamp --options runtime \
-    --sign "$IDENTITY" \
-    "$APP"
+# required — but a secure timestamp needs a real identity and the network, so
+# an ad-hoc local build asks for neither.
+if [ "$IDENTITY" = "-" ]; then
+    codesign --force --sign - "$APP"
+else
+    codesign --force --timestamp --options runtime \
+        --sign "$IDENTITY" \
+        "$APP"
+fi
 
 codesign --verify --strict --verbose=2 "$APP"
 

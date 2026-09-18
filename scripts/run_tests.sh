@@ -21,6 +21,7 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 # them here would make the tests unrunnable on plain Command Line Tools.
 SOURCES=(
     "$ROOT/holdmyPen/EditorTypography.swift"
+    "$ROOT/holdmyPen/WrapGrid.swift"
     "$ROOT/holdmyPen/EditorTextView.swift"
     "$ROOT/holdmyPen/FloatingImageView.swift"
     "$ROOT/holdmyPen/Models/Note.swift"

@@ -129,7 +129,14 @@ struct RichTextEditor: NSViewRepresentable {
 
         for noteImage in images where coordinator.imageViews[noteImage.id] == nil {
             guard let image = NSImage(data: noteImage.imageData) else { continue }
-            let frame = CGRect(x: noteImage.x, y: noteImage.y, width: noteImage.width, height: noteImage.height)
+            var frame = CGRect(x: noteImage.x, y: noteImage.y, width: noteImage.width, height: noteImage.height)
+            // Images stored before the grid existed — and anything pasted, which
+            // arrives at a plain cascading offset — get placed on it here. The
+            // stored position is left alone until the next drag; it is where the
+            // picture wants to be, and the grid decides where that lands.
+            if let grid = textView.wrapGrid {
+                frame.origin = grid.snappedOrigin(for: frame, within: textView.bounds)
+            }
             let imageView = FloatingImageView(imageId: noteImage.id, image: image, imageFrame: frame)
             // Moving the image reflows the text as it goes; only the final
             // frame is written back to the store.

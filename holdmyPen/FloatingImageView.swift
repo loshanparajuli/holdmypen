@@ -89,15 +89,25 @@ final class FloatingImageView: NSView {
         bounds.insetBy(dx: Self.chromePadding, dy: Self.chromePadding)
     }
 
+    /// The column-and-line grid to place this picture on. Nil when it isn't
+    /// sitting in an editor — in a bare superview it simply moves freely.
+    private var wrapGrid: WrapGrid? {
+        (superview as? FormattableTextView)?.wrapGrid
+    }
+
     private func grabRect(for corner: ResizeCorner) -> CGRect {
         let point = corner.position(in: imageRect)
         return CGRect(x: point.x - cornerGrabRadius, y: point.y - cornerGrabRadius,
                       width: cornerGrabRadius * 2, height: cornerGrabRadius * 2)
     }
 
-    // Diagonally out from the top-right corner, clear of the corner point.
+    // Inside the picture's top-right, far enough in to clear the corner point.
+    // It used to sit diagonally outside the corner, which put it over the line
+    // of text above the picture — chrome has no business covering the words.
     private var deleteBadgeCenter: CGPoint {
-        CGPoint(x: imageRect.maxX + 13, y: imageRect.minY - 13)
+        let picture = imageRect
+        let inset = min(22, min(picture.width, picture.height) / 2)
+        return CGPoint(x: picture.maxX - inset, y: picture.minY + inset)
     }
 
     private var deleteBadgeRect: CGRect {
@@ -238,9 +248,13 @@ final class FloatingImageView: NSView {
 
     // MARK: - Drawing
 
+    // Light disc, dark cross — the same treatment as the corner points, and for
+    // the same reason: a dark disc vanishes against a dark page, a light one
+    // vanishes against a pale image, so it needs both a light fill and a dark
+    // outline to survive either.
     private static let deleteIcon: NSImage = {
         let base = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: "Remove image") ?? NSImage()
-        let config = NSImage.SymbolConfiguration(paletteColors: [.white, .black.withAlphaComponent(0.65)])
+        let config = NSImage.SymbolConfiguration(paletteColors: [.black.withAlphaComponent(0.85), .white])
         return base.withSymbolConfiguration(config) ?? base
     }()
 
@@ -257,6 +271,10 @@ final class FloatingImageView: NSView {
             drawCornerPoint(at: corner.position(in: picture))
         }
         Self.deleteIcon.draw(in: deleteBadgeRect)
+        NSColor.black.withAlphaComponent(0.6).setStroke()
+        let badgeRing = NSBezierPath(ovalIn: deleteBadgeRect.insetBy(dx: 0.5, dy: 0.5))
+        badgeRing.lineWidth = 1
+        badgeRing.stroke()
     }
 
     // Two dashed passes offset from each other, so the border stays visible
@@ -290,7 +308,8 @@ final class FloatingImageView: NSView {
     static func resizedImageFrame(original: CGRect,
                                   corner: ResizeCorner,
                                   dragTo point: CGPoint,
-                                  within bounds: CGRect) -> CGRect {
+                                  within bounds: CGRect,
+                                  grid: WrapGrid? = nil) -> CGRect {
         guard original.width > 0, original.height > 0 else { return original }
         let aspectRatio = original.width / original.height
         let anchor = corner.anchor(in: original)
@@ -323,17 +342,37 @@ final class FloatingImageView: NSView {
             width = height * aspectRatio
         }
 
+        // A whole number of columns wide, so the picture's edges land where the
+        // text beside it starts. The anchored corner is already on the grid, so
+        // snapping the size leaves the other edge on it too.
+        if let grid,
+           let snapped = grid.snappedSize(for: CGSize(width: width, height: height),
+                                          fittingWidth: max(0, availableWidth),
+                                          height: max(0, availableHeight),
+                                          minimumSide: minimumSide) {
+            width = snapped.width
+            height = snapped.height
+        }
+
         return CGRect(x: corner.growsLeftward ? anchor.x - width : anchor.x,
                       y: corner.growsUpward ? anchor.y - height : anchor.y,
                       width: width,
                       height: height)
     }
 
-    /// Where a move drag lands the picture, kept inside `bounds`.
-    static func movedImageFrame(original: CGRect, by offset: CGSize, within bounds: CGRect) -> CGRect {
+    /// Where a move drag lands the picture, kept inside `bounds` and — when
+    /// there's a grid — on the nearest column start and line of type, so it
+    /// steps between slots rather than drifting to an arbitrary offset.
+    static func movedImageFrame(original: CGRect,
+                                by offset: CGSize,
+                                within bounds: CGRect,
+                                grid: WrapGrid? = nil) -> CGRect {
         var moved = original.offsetBy(dx: offset.width, dy: offset.height)
         moved.origin.x = max(bounds.minX, min(moved.origin.x, bounds.maxX - moved.width))
         moved.origin.y = max(bounds.minY, min(moved.origin.y, bounds.maxY - moved.height))
+        if let grid {
+            moved.origin = grid.snappedOrigin(for: moved, within: bounds)
+        }
         return moved
     }
 
@@ -363,18 +402,21 @@ final class FloatingImageView: NSView {
         guard isDragging, let superview = superview else { return }
         let current = superview.convert(event.locationInWindow, from: nil)
 
+        let grid = wrapGrid
         let updated: CGRect
         if let corner = activeCorner {
             updated = Self.resizedImageFrame(original: dragStartImageFrame,
                                              corner: corner,
                                              dragTo: current,
-                                             within: superview.bounds)
+                                             within: superview.bounds,
+                                             grid: grid)
         } else {
             let offset = CGSize(width: current.x - dragStartLocation.x,
                                 height: current.y - dragStartLocation.y)
             updated = Self.movedImageFrame(original: dragStartImageFrame,
                                            by: offset,
-                                           within: superview.bounds)
+                                           within: superview.bounds,
+                                           grid: grid)
         }
 
         guard updated != imageFrame else { return }

@@ -488,7 +488,8 @@ suite("a sliver of column beside an image is not used for text") {
     textView.setImageExclusionFrames([image])
     layoutManager.ensureLayout(for: container)
 
-    let band = (top: CGFloat(100 - 40 - 8), bottom: CGFloat(100 + 160 - 40 + 8))
+    let padding = FormattableTextView.exclusionPadding
+    let band = (top: 100 - 40 - padding, bottom: 100 + 160 - 40 + padding)
     var linesBesideImage = 0
     var textOnTheSliver = 0
     layoutManager.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: layoutManager.numberOfGlyphs)) { _, used, _, _, _ in
@@ -663,6 +664,243 @@ suite("the chrome ring does not swallow clicks meant for the text") {
     check(view.hitTest(CGPoint(x: 320, y: picture.maxY + 12)) == nil,
           "the empty chrome ring below the picture swallowed a click")
     check(view.hitTest(CGPoint(x: 600, y: 400)) == nil, "hit test claimed a point nowhere near it")
+}
+
+// A 1000pt writing column at the editor's own line height.
+func testGrid() -> WrapGrid {
+    WrapGrid(containerWidth: 1000,
+             origin: CGPoint(x: 16, y: 40),
+             lineHeight: 32)!
+}
+
+suite("the wrap grid divides the column into whole columns") {
+    let grid = testGrid()
+    check(abs(grid.containerWidth - 1000) < 0.001, "container width came back as \(grid.containerWidth)")
+    check(grid.columnCount == 12, "expected 12 columns, got \(grid.columnCount)")
+    // 12 columns and the 11 gutters between them fill the column exactly.
+    check(abs(grid.width(spanning: 12) - 1000) < 0.001,
+          "a full-width span is \(grid.width(spanning: 12)), not 1000")
+    check(abs(grid.width(spanning: 1) - (grid.pitch - grid.gutter)) < 0.001, "one column is wrong")
+    // Each span is the columns plus the gutters between them.
+    check(abs(grid.width(spanning: 3) - (3 * grid.pitch - grid.gutter)) < 0.001, "three columns are wrong")
+
+    check(grid.columnSpan(forWidth: grid.width(spanning: 4)) == 4, "a 4-column width did not read back as 4")
+    check(grid.columnSpan(forWidth: 1) == 1, "a hairline width should still be one column")
+    check(grid.columnSpan(forWidth: 99999) == 12, "an enormous width should cap at the full column")
+
+    // Too narrow to carry a grid at all.
+    check(WrapGrid(containerWidth: 40, origin: .zero, lineHeight: 32) == nil,
+          "a 40pt column should have no grid")
+}
+
+suite("a picture snaps onto a column start and a line of type") {
+    let grid = testGrid()
+    let page = CGRect(x: 0, y: 0, width: 1032, height: 2000)
+    let size = CGSize(width: grid.width(spanning: 4), height: 200)
+
+    // Dropped at a deliberately awkward offset.
+    let loose = CGRect(x: 16 + grid.pitch * 2 + 19, y: 40 + 32 * 5 + 11,
+                       width: size.width, height: size.height)
+    let snapped = grid.snappedOrigin(for: loose, within: page)
+
+    let column = (snapped.x - grid.origin.x) / grid.pitch
+    check(abs(column - column.rounded()) < 0.001, "x landed between columns at \(snapped.x)")
+    check(Int(column.rounded()) == 2, "expected column 2, got \(column)")
+    let line = (snapped.y - grid.origin.y) / grid.lineHeight
+    check(abs(line - line.rounded()) < 0.001, "y landed between lines at \(snapped.y)")
+    check(Int(line.rounded()) == 5, "expected line 5, got \(line)")
+
+    // A picture shoved off the right edge comes back to the last column that
+    // can hold it, rather than hanging over the edge.
+    let overshot = CGRect(x: 5000, y: 40, width: size.width, height: size.height)
+    let pulledBack = grid.snappedOrigin(for: overshot, within: page)
+    let lastColumn = (pulledBack.x - grid.origin.x) / grid.pitch
+    check(Int(lastColumn.rounded()) == 12 - 4, "a 4-column picture should stop at column 8, got \(lastColumn)")
+    check(pulledBack.x + size.width <= grid.origin.x + grid.containerWidth + 0.001,
+          "it still hangs off the right edge")
+
+    // And never above the first line.
+    let above = grid.snappedOrigin(for: CGRect(x: 16, y: -500, width: size.width, height: size.height),
+                                   within: page)
+    check(above.y == grid.origin.y, "a picture dragged above the text should stop at the first line")
+}
+
+suite("resizing lands on a whole number of columns") {
+    let grid = testGrid()
+    // 3:2, a bit wider than three columns.
+    let loose = CGSize(width: grid.width(spanning: 3) + 22, height: (grid.width(spanning: 3) + 22) / 1.5)
+    guard let snapped = grid.snappedSize(for: loose, fittingWidth: 1000, height: 2000, minimumSide: 40) else {
+        check(false, "no snapped size came back")
+        return
+    }
+    check(abs(snapped.width - grid.width(spanning: 3)) < 0.001,
+          "expected 3 columns (\(grid.width(spanning: 3))), got \(snapped.width)")
+    check(abs(snapped.width / snapped.height - 1.5) < 0.001,
+          "snapping to columns broke the 3:2 ratio: \(snapped.width / snapped.height)")
+
+    // When the space left won't hold the rounded-up span, it steps down a
+    // column rather than overflowing.
+    guard let squeezed = grid.snappedSize(for: loose, fittingWidth: grid.width(spanning: 2) + 5,
+                                          height: 2000, minimumSide: 40) else {
+        check(false, "no snapped size came back for the squeezed case")
+        return
+    }
+    check(abs(squeezed.width - grid.width(spanning: 2)) < 0.001,
+          "expected it to step down to 2 columns, got \(squeezed.width)")
+}
+
+suite("text stops at the picture's whole grid cell") {
+    let grid = testGrid()
+    // Three columns starting at column 2, snapped as a drag would leave it.
+    let frame = CGRect(x: grid.origin.x + grid.pitch * 2, y: grid.origin.y + grid.lineHeight * 3,
+                       width: grid.width(spanning: 3), height: 150)
+    let cell = grid.exclusionCell(forImageFrame: frame)
+
+    // Text on the left stops at the end of column 1; text on the right starts
+    // at the start of column 5. Both are grid lines, which is the whole point:
+    // every line beside the picture begins at the same x.
+    check(abs(cell.minX - (grid.pitch * 2 - grid.gutter)) < 0.001,
+          "the cell's left edge is \(cell.minX), not the end of column 1")
+    check(abs(cell.maxX - grid.pitch * 5) < 0.001,
+          "the cell's right edge is \(cell.maxX), not the start of column 5")
+
+    // Whole lines down, so the text below resumes on a clean line.
+    check(abs(cell.minY.truncatingRemainder(dividingBy: grid.lineHeight)) < 0.001,
+          "the cell starts mid-line at \(cell.minY)")
+    check(abs(cell.maxY.truncatingRemainder(dividingBy: grid.lineHeight)) < 0.001,
+          "the cell ends mid-line at \(cell.maxY)")
+    check(cell.minY <= grid.lineHeight * 3 && cell.maxY >= grid.lineHeight * 3 + 150,
+          "the cell \(cell) does not cover the picture")
+
+    // A picture at an arbitrary offset still produces a cell on the grid —
+    // this is what stops a ragged left edge on the text beside it.
+    let ragged = CGRect(x: grid.origin.x + 37, y: grid.origin.y + 19, width: 211, height: 97)
+    let raggedCell = grid.exclusionCell(forImageFrame: ragged)
+    check(abs((raggedCell.maxX / grid.pitch) - (raggedCell.maxX / grid.pitch).rounded()) < 0.001,
+          "an off-grid picture gave an off-grid right edge at \(raggedCell.maxX)")
+    check(raggedCell.maxX >= ragged.maxX - grid.origin.x, "the cell does not cover the picture's right edge")
+    check(abs(raggedCell.maxY.truncatingRemainder(dividingBy: grid.lineHeight)) < 0.001,
+          "an off-grid picture gave an off-grid bottom at \(raggedCell.maxY)")
+}
+
+suite("dragging a picture snaps it to the grid and reflows the text as it goes") {
+    // The whole chain, driven by real mouse events: mouseDown on the picture,
+    // a run of mouseDragged, mouseUp — through the snapping, out to the
+    // exclusion paths, and into TextKit's layout.
+    let frame = NSRect(x: 0, y: 0, width: 900, height: 620)
+    let window = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
+    let textView = FormattableTextView.makeWithTextKit1(frame: frame)
+    textView.autoresizingMask = [.width]
+    textView.isVerticallyResizable = true
+    textView.isHorizontallyResizable = false
+    textView.minSize = .zero
+    textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+    textView.font = EditorTypography.font()
+    textView.textContainerInset = NSSize(width: 16, height: 40)
+    textView.defaultParagraphStyle = EditorTypography.paragraphStyle
+    textView.typingAttributes = EditorTypography.attributes(color: themeColor)
+
+    let scrollView = NSScrollView(frame: frame)
+    scrollView.documentView = textView
+    window.contentView = scrollView
+    window.contentView?.layoutSubtreeIfNeeded()
+    hostWindows.append(window)
+
+    textView.insertText(String(repeating: "the quick brown fox jumps over the lazy dog ", count: 40),
+                        replacementRange: NSRange(location: 0, length: 0))
+
+    guard let grid = textView.wrapGrid else {
+        check(false, "no wrap grid")
+        return
+    }
+
+    let picture = NSImage(size: NSSize(width: 300, height: 200))
+    picture.lockFocus()
+    NSColor.systemTeal.drawSwatch(in: NSRect(x: 0, y: 0, width: 300, height: 200))
+    picture.unlockFocus()
+
+    let start = NSRect(x: grid.origin.x, y: grid.origin.y, width: 300, height: 200)
+    let view = FloatingImageView(imageId: UUID(), image: picture, imageFrame: start)
+    textView.addSubview(view)
+
+    // Wired the way RichTextEditor wires it: every step of the drag goes
+    // straight to the text container.
+    var liveFrames: [CGRect] = []
+    var committed: CGRect?
+    view.onFrameChanging = { _, moved in
+        liveFrames.append(moved)
+        textView.setImageExclusionFrames([moved])
+    }
+    view.onFrameChanged = { _, moved in committed = moved }
+    textView.setImageExclusionFrames([start])
+
+    func event(_ type: NSEvent.EventType, atViewPoint point: NSPoint) -> NSEvent? {
+        NSEvent.mouseEvent(with: type, location: textView.convert(point, to: nil), modifierFlags: [],
+                           timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                           eventNumber: 0, clickCount: 1, pressure: 1)
+    }
+
+    // Grab the middle of the picture — away from every corner — and walk it
+    // across in small steps, the way a trackpad delivers a drag.
+    let grab = NSPoint(x: start.midX, y: start.midY)
+    guard let down = event(.leftMouseDown, atViewPoint: grab) else {
+        check(false, "could not synthesise a mouse event")
+        return
+    }
+    view.mouseDown(with: down)
+    var dragEventsDelivered = 0
+    for step in stride(from: 20, through: 320, by: 20) {
+        if let dragged = event(.leftMouseDragged,
+                               atViewPoint: NSPoint(x: grab.x + CGFloat(step), y: grab.y + CGFloat(step) / 2)) {
+            view.mouseDragged(with: dragged)
+            dragEventsDelivered += 1
+        }
+    }
+    if let up = event(.leftMouseUp, atViewPoint: NSPoint(x: grab.x + 320, y: grab.y + 160)) {
+        view.mouseUp(with: up)
+    }
+
+    // Live: the text was told about the move repeatedly, not once at the end.
+    check(liveFrames.count > 1, "the drag reported \(liveFrames.count) intermediate positions, expected several")
+    check(committed != nil, "the drag never committed a final position")
+    check(committed == view.imageFrame, "the committed frame \(String(describing: committed)) is not where the picture ended up \(view.imageFrame)")
+    check(view.imageFrame.origin != start.origin, "the picture never moved")
+    check(view.imageFrame.size == start.size, "moving the picture resized it to \(view.imageFrame.size)")
+
+    // Grid: every position it passed through sat on a column start and a line.
+    for moved in liveFrames {
+        let column = (moved.minX - grid.origin.x) / grid.pitch
+        let line = (moved.minY - grid.origin.y) / grid.lineHeight
+        check(abs(column - column.rounded()) < 0.001, "a drag step landed between columns at x=\(moved.minX)")
+        check(abs(line - line.rounded()) < 0.001, "a drag step landed between lines at y=\(moved.minY)")
+    }
+    // Stepping, not sliding: the picture only reports a new position when it
+    // changes slot, so a run of mouse events produces far fewer moves than
+    // events. Free movement would give one move per event.
+    check(liveFrames.count < dragEventsDelivered,
+          "\(dragEventsDelivered) drag events produced \(liveFrames.count) moves; the picture is sliding, not stepping")
+    check(Set(liveFrames.map { "\($0.minX),\($0.minY)" }).count == liveFrames.count,
+          "the same slot was reported twice")
+
+    // And the text really did reflow around where it ended up.
+    guard let layoutManager = textView.layoutManager, let container = textView.textContainer else {
+        check(false, "no TextKit 1 stack")
+        return
+    }
+    layoutManager.ensureLayout(for: container)
+    check(container.exclusionPaths.count == 1, "expected one exclusion path after the drag")
+
+    let cell = grid.exclusionCell(forImageFrame: view.imageFrame)
+    var leftEdges = Set<String>()
+    layoutManager.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: layoutManager.numberOfGlyphs)) { _, used, _, _, _ in
+        if used.midY > cell.minY && used.midY < cell.maxY {
+            leftEdges.insert(String(format: "%.1f", used.minX))
+        }
+    }
+    check(!leftEdges.isEmpty, "no text was laid out beside the picture after the drag")
+    // The point of the grid: one straight edge, not a ragged one per line.
+    check(leftEdges.count == 1,
+          "the lines beside the picture start at \(leftEdges.count) different x positions: \(leftEdges.sorted())")
 }
 
 // MARK: - Report
